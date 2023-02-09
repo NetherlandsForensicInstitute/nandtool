@@ -1,0 +1,43 @@
+# works for Hermes 2.0 and Hermes 2.1
+
+partitions = ['without_spare', "with_spare"]
+
+[custom_bch8]
+t=8
+poly=17475  # x^14+x^10+x^6+x+1, equivalent of LFSR feedback polynomial: 1111111001111011100101111111111001010011100001000011110001110110010110011110001001110011110011010101110000101101
+
+[whole_layout]
+pagesize=2048 #0x800
+oobsize=64 #0x40
+pages_per_block=64
+ecc_protected_data=[ [[0, 0x410]], [[0x41E, 0x800], [0x802, 0x810], [0x800, 0x802], [0x81E, 0x83C]] ]  # 2 chunks of 0x410 bytes
+user_data=[ [[0, 0x410]], [[0x41E, 0x800], [0x802, 0x810]] ]  # chunk of 0x410 and chunk of 0x3f0
+ecc=[ [[0x410, 0x41E]], [[0x810, 0x81e]] ] # 14 bytes ecc per chunk
+ecc_algorithm='custom_bch8'
+ecc_protected_data_reverse=true
+ecc_protected_data_invert=true
+ecc_reverse=true
+ecc_invert=true
+
+[spare_layout]
+pagesize=2048 #0x800
+oobsize=64 #0x40
+pages_per_block=64
+ecc_protected_data=[ [[0, 0x410]], [[0x41E, 0x800], [0x802, 0x810], [0x800, 0x802], [0x81E, 0x83C]] ]  # 2 chunks of 0x410 bytes
+user_data=[ [[0, 0x840]] ] 
+ecc=[ [[0x410, 0x41E]], [[0x810, 0x81e]] ] # 14 bytes ecc per chunk
+ecc_algorithm='custom_bch8'
+ecc_protected_data_reverse=true
+ecc_protected_data_invert=true
+ecc_reverse=true
+ecc_invert=true
+
+[without_spare]
+startblock=0
+endblock=4095
+layout='whole_layout'
+
+[with_spare]
+startblock=0
+endblock=4095
+layout='spare_layout'

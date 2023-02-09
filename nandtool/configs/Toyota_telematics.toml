@@ -1,0 +1,22 @@
+# tested on continental and denso images
+
+partitions = ['RAW']
+
+[bch4]
+t=4
+poly=8219
+
+[raw_layout]
+pagesize=2048 #0x800
+oobsize=64 #0x40
+pages_per_block=64
+ecc_protected_data=[ [[0, 464], [465, 517]], [[528, 992], [993, 1045]], [[1056, 1520], [1521, 1573]], [[1584, 2048], [2049, 2101]] ] # 4 chunks of 0x204 bytes
+user_data=[ [[0, 464], [465, 517]], [[528, 992], [993, 1045]], [[1056, 1520], [1521, 1573]], [[1584, 2048], [2049, 2085]] ] # 3 chunks of 0x204 bytes and 1 chunck of 0x1f4
+ecc=[ [[517, 524]], [[1045, 1052]], [[1573, 1580]], [[2101, 2108]] ] # 7 bytes ecc per chunk
+ecc_algorithm='bch4'
+
+[RAW]
+startblock=0
+endblock=4095
+layout='raw_layout'
+

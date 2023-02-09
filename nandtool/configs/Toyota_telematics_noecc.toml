@@ -1,0 +1,16 @@
+# tested on continental and denso images
+
+partitions = ['DATA']
+
+[data_layout]
+pagesize=2048 #0x800
+oobsize=64 #0x40
+pages_per_block=64
+user_data=[ [[0, 464], [465, 517], [528, 992], [993, 1045], [1056, 1520], [1521, 1573], [1584, 2048], [2049, 2085]] ] # 3 chunks of 0x204 bytes and 1 chunck of 0x1f4
+
+
+[DATA]
+startblock=0
+endblock=4095
+layout='data_layout'
+

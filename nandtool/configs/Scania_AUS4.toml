@@ -1,0 +1,96 @@
+partitions = ['IPL0', 'IPL1', 'IPL2', 'IPL3', 'IFS0', 'IFS1', 'DSP1', 'DSP2', 'ETFS']
+
+[bch4]
+t=4
+poly=8219
+
+[bch8]
+t=8
+poly=8219
+
+[ipl_layout]
+pagesize=2048 #0x800
+oobsize=64 #0x40
+pages_per_block=64
+ecc_protected_data=[ [[0, 512]], [[512, 1024]], [[1024, 1536]], [[1536, 2048]] ]  # 4 chunks of 0x200 bytes
+user_data=[ [[0, 512]], [[512, 1024]], [[1024, 1536]], [[1536, 2048]] ]  # 4 chunks of 0x200 bytes
+ecc=[ [[2050, 2063]], [[2064, 2077]], [[2078, 2091]], [[2092, 2105]] ] # 13 bytes ecc per chunk
+left_shift_ecc_buf=0  # Default
+ecc_algorithm='bch8'
+
+[ifs_layout]
+pagesize=2048 #0x800
+oobsize=64 #0x40
+pages_per_block=64
+ecc_protected_data=[ [[0, 512],[2048, 2052]], [[512, 1024],[2052, 2056]], [[1024, 1536],[2056, 2060]], [[1536, 2048],[2060, 2064]] ]
+user_data=[ [[0, 512]], [[512, 1024]], [[1024, 1536]], [[1536, 2048]] ]
+ecc=[[[2064, 2071]], [[2071, 2078]], [[2078, 2085]], [[2085, 2092]] ] # 7 bytes ecc per chunk
+left_shift_ecc_buf=4
+ecc_algorithm='bch4'
+
+[etfs_layout]
+pagesize=2048 #0x800
+oobsize=64 #0x40
+pages_per_block=64
+ecc_protected_data=[ [[0, 512],[2048, 2052]], [[512, 1024],[2052, 2056]], [[1024, 1536],[2056, 2060]], [[1536, 2048],[2060, 2064]] ]
+user_data=[ [[0, 512]], [[512, 1024]], [[1024, 1536]], [[1536, 2048]] ]
+ecc=[[[2064, 2071]], [[2071, 2078]], [[2078, 2085]], [[2085, 2092]] ] # 7 bytes ecc per chunk
+left_shift_ecc_buf=4
+ecc_algorithm='bch4'
+etfs='etfs_transaction'
+
+[etfs_transaction]
+fid=[2060, 2062]
+cluster=[2056, 2060]
+nclusters=[2050, 2052]
+sequence=[2052, 2056]
+
+[IPL0]
+startblock=0
+endblock=0
+layout='ipl_layout'
+
+[IPL1]
+startblock=1
+endblock=1
+layout='ipl_layout'
+
+[IPL2]
+startblock=2
+endblock=2
+layout='ipl_layout'
+
+[IPL3]
+startblock=3
+endblock=3
+layout='ipl_layout'
+
+[IFS0]
+startblock=4
+endblock=211
+layout='ifs_layout'
+
+[IFS1]
+startblock=212
+endblock=419
+layout='ifs_layout'
+
+[DSP1]
+startblock=420
+endblock=428
+layout='ifs_layout'
+
+[DSP2]
+startblock=429
+endblock=437
+layout='ifs_layout'
+
+[BIOS]
+startblock=438
+endblock=453
+layout='ifs_layout'
+
+[ETFS]
+startblock=454
+endblock=2047
+layout='etfs_layout'

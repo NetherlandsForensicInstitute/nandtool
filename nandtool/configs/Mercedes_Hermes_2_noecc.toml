@@ -1,0 +1,14 @@
+# works for Hermes 2.0 and Hermes 2.1
+
+partitions = ['DATA']
+
+[data_layout]
+pagesize=2048 #0x800
+oobsize=64 #0x40
+pages_per_block=64
+user_data=[ [[0, 0x410], [0x41E, 0x800], [0x802, 0x810]] ]  # chunk of 0x410 and chunk of 0x3f0
+
+[DATA]
+startblock=0
+endblock=4095
+layout='data_layout'

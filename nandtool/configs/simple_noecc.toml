@@ -1,0 +1,15 @@
+# extract image data without ecc correction
+# works for jaguar, scania, and toyota_touch_2_go images
+
+partitions = ['DATA']
+
+[data_layout]
+pagesize=2048
+oobsize=64
+pages_per_block=64
+user_data=[ [[0, 2048]] ]
+
+[DATA]
+startblock=0
+endblock=-1
+layout='data_layout'
