@@ -108,10 +108,14 @@ def mount(image, mount_point, conf):
     if not conf.exists():
         LOGGER.warning(f"Configuration file {conf} not found, exiting.")
         return -3
-    
+
     LOGGER.info(f"Mounting corrected image {image} on mount point {mount_point} with configuration {conf}")
     conf = load_config(conf)
     nand = FuseNAND(image, mount_point, conf)
-    FUSE(nand, str(mount_point), nothreads=True, foreground=True)
+    call_fuse(nand, mount_point)
     LOGGER.info(f"Unmounting image {image} from mount point {mount_point}")
+
+
+def call_fuse(nand, mount_point):
+    FUSE(nand, str(mount_point), nothreads=True, foreground=True)
 
