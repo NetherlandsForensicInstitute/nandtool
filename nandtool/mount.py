@@ -1,14 +1,14 @@
+import logging
+import mmap
+import os
 import stat
 from pathlib import Path
-import logging
-import os
 from time import time
 
 from fuse import FUSE, Operations
 
-from nandtool.nand import build_partitions
 from nandtool.config import load_config
-
+from nandtool.nand import build_partitions
 
 LOGGER = logging.getLogger(__name__)
 
@@ -21,11 +21,23 @@ class FuseNAND(Operations):
         offset (int): Start of the ETFS partition in the image.
     """
 
-    def __init__(self, image, mountpoint, conf):
+    def __init__(self, image_path, mountpoint, conf):
         self.mountpoint = Path(mountpoint)
-        # TODO add visual feedback that processing can take a while
-        self.partitions = build_partitions(image, conf)
+
+        self.image_path = image_path
+        self.f = open(self.image_path, "rb")
+        self.mm = mmap.mmap(
+            self.f.fileno(),
+            0,
+            access=mmap.ACCESS_READ,
+        )
+
+        self.partitions = build_partitions(self.mm, conf)
         LOGGER.info(f"NAND chip is now mounted at {mountpoint}")
+
+    def close(self):
+        self.mm.close()
+        self.f.close()
 
     def getattr(self, path, fh=None):
         """Get directory with stat information.
@@ -96,7 +108,6 @@ class FuseNAND(Operations):
 
 
 def mount(image, mount_point, conf):
-
     if not image.exists():
         LOGGER.warning(f"Image file {image} not found, exiting.")
         return -1
@@ -113,9 +124,9 @@ def mount(image, mount_point, conf):
     conf = load_config(conf)
     nand = FuseNAND(image, mount_point, conf)
     call_fuse(nand, mount_point)
+    nand.close()
     LOGGER.info(f"Unmounting image {image} from mount point {mount_point}")
 
 
 def call_fuse(nand, mount_point):
     FUSE(nand, str(mount_point), nothreads=True, foreground=True)
-

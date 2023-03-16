@@ -1,90 +1,94 @@
-import mmap
-import bchlib
 import logging
-import numpy as np
 from itertools import chain
+
+import bchlib
+import numpy as np
 from tqdm import tqdm
-from pathlib import Path
 
 LOGGER = logging.getLogger(__name__)
 
 
-def modify_buffer(buffer, reverse=False, invert=False):
+def modify_buffer(buffer, reverse=False, invert=False, left_shift=False):
     array = np.frombuffer(buffer, "u1")
     if invert:
         array = array ^ 0xFF
     if reverse:
-        array = ((array * 0x0202020202) & 0x010884422010) % 1023  # C trickery to bitwise reverse a byte
+        # magic calculation to bitwise reverse a byte
+        array = ((array * 0x0202020202) & 0x010884422010) % 1023
     return array.astype("u1").tobytes()
 
 
-def build_partitions(image, conf):
+def build_partitions(image_data, conf):
     partitions = dict()
     for partition in conf.partitions:
         partconf = conf[partition]
         LOGGER.info(f"Start building partition: {partition}")
-        partitions[partition] = NAND(image, partconf)
+        partitions[partition] = NAND(image_data, partconf)
         LOGGER.info(f"Done building partition: {partition}")
     return partitions
 
 
-class NAND:
-    def __init__(self, path, conf):
-        self.path = path
-        self.f = open(self.path, "rb")
-        conf = conf.to_dict()  # If we keep using the dynaconf object throughout the code, access will be slow
-        self.conf = conf
-        layout = conf["layout"]
-        if conf["endblock"] == -1:
-            conf["endblock"] = Path(path).stat().st_size // layout["blocksize"] - 1
-        num_blocks = conf["endblock"] + 1 - conf["startblock"]
-        self.size_with_oob = num_blocks * layout["blocksize"]
-        self.mm = mmap.mmap(
-            self.f.fileno(), length=self.size_with_oob, offset=conf["startblock"] * layout["blocksize"], access=mmap.ACCESS_READ
-        )
-        self.pagesize = layout["pagesize"]
-        self.oobsize = layout["oobsize"]
+class Layout:
+    """Class to avoid diving into dynaconf object for every call. Unpacking into this class speeds up code."""
 
-        if layout["ecc_algorithm"]:
-            self.bch = bchlib.BCH(layout["ecc_algorithm"]["poly"], layout["ecc_algorithm"]["t"])
-        else: 
-            self.bch = None
-        # Avoid diving into dynaconf for every single chunk correction, which is slow!
-        self.ecc = layout["ecc"]
-        self.ecc_protected_data = layout["ecc_protected_data"]
+    def __init__(self, layout_conf):
+        # partition size info
+        self.blocksize = layout_conf["blocksize"]
+        self.pagesize = layout_conf["pagesize"]
+        self.oobsize = layout_conf["oobsize"]
+        self.pages_per_block = layout_conf["pages_per_block"]
 
-        self.user_data = layout["user_data"]
-        self.left_shift = layout["left_shift_ecc_buf"]
-        
-        self.ecc_protected_data_reverse = layout["ecc_protected_data_reverse"]
-        self.ecc_protected_data_invert = layout["ecc_protected_data_invert"]
-        self.ecc_reverse = layout["ecc_reverse"]
-        self.ecc_invert = layout["ecc_invert"]
+        # layout of ecc and data in the page
+        self.ecc = layout_conf["ecc"]
+        self.ecc_protected_data = layout_conf["ecc_protected_data"]
+        self.user_data = layout_conf["user_data"]
+        self.left_shift = layout_conf["left_shift_ecc_buf"]
+        self.protected_data_reverse = layout_conf["ecc_protected_data_reverse"]
+        self.protected_data_invert = layout_conf["ecc_protected_data_invert"]
+        self.ecc_reverse = layout_conf["ecc_reverse"]
+        self.ecc_invert = layout_conf["ecc_invert"]
 
-        if hasattr(layout, "etfs") or 'etfs' in layout:
-            self.etfs_layout = layout["etfs"]
+        # etfs layout if specified
+        if hasattr(layout_conf, "etfs") or "etfs" in layout_conf:
+            self.etfs_layout = layout_conf["etfs"]
         else:
             self.etfs_layout = dict()
 
-        pagesize = sum((end - start for chunk in self.user_data for start, end in chunk))
-        if self.etfs_layout:
-            pagesize += 16
-        # pagesize = layout["pagesize"] if not self.etfs_layout else layout["pagesize"] + 16
-        self.corrected_partition_size = num_blocks * layout["pages_per_block"] * pagesize
+        # ecc algorithm if specified
+        ecc_algorithm = layout_conf["ecc_algorithm"]
+        if ecc_algorithm:
+            self.bch = bchlib.BCH(ecc_algorithm["poly"], ecc_algorithm["t"])
+        else:
+            self.bch = None
 
-        # This actually starts the ECC correction
+
+class NAND:
+    def __init__(self, data, part_conf):
+        self.data = data
+
+        # extract configuration of partition
+        self.part_conf = part_conf.to_dict()
+        self.layout = Layout(self.part_conf["layout"])
+        self.start = part_conf["startblock"]
+        self.end = part_conf["endblock"]
+        if self.end == -1:
+            self.end = len(self.data) // self.layout.blocksize - 1
+        self.num_blocks = self.end + 1 - self.start
+        self.raw_partition_size = self.num_blocks * self.layout.blocksize
+
+        # calculate corrected partition size
+        pagesize = sum((end - start for chunk in self.layout.user_data for start, end in chunk))
+        if self.layout.etfs_layout:
+            pagesize += 16
+        self.corrected_partition_size = self.num_blocks * self.layout.pages_per_block * pagesize
+
+        # start ecc correction
         self.corrected_bits = 0
         self.corrected = self.correct_partition()
         LOGGER.info(f"Corrected {self.corrected_bits} bits")
 
-    def __del__(self):
-        self.mm.close()
-        self.f.close()
-
     @staticmethod
-    def rebuild_buffer(mapping, raw_pagesize=None):
-        if not raw_pagesize:
-            raise ValueError("Invalid arguments, need raw_pagesize!")
+    def rebuild_buffer(mapping, raw_pagesize):
         out = b""
         cursor = 0
         for offset, buf in sorted(mapping.items(), key=lambda x: x[0]):
@@ -97,82 +101,109 @@ class NAND:
             out += b"\xff" * (raw_pagesize - len(out))
         return out
 
-    def bch_correct_chunk(self, data_ranges, ecc_ranges, data_map):
-        data = b"".join(data_map[start] for start, _ in data_ranges)
-        ecc = b"".join(data_map[start] for start, _ in ecc_ranges)
-        data = modify_buffer(data, invert=self.ecc_protected_data_invert, reverse=self.ecc_protected_data_reverse)
-        ecc = modify_buffer(ecc, invert=self.ecc_invert, reverse=self.ecc_reverse)
-        leftshift = self.left_shift
-        if leftshift == 4:
+    def bch_correct_chunk(self, data, ecc):
+        # modify data and ecc buffers if needed
+        ecc = modify_buffer(ecc, self.layout.ecc_invert, self.layout.ecc_reverse)
+        data = modify_buffer(data, self.layout.protected_data_invert, self.layout.protected_data_reverse)
+        if self.layout.left_shift == 4:
             ecc = bytes.fromhex(ecc.hex()[1:] + "0")
-        flips, data_corrected, ecc_corrected = self.bch.decode(data, ecc)
-        if leftshift == 4:
-            ecc_corrected = bytes.fromhex("0" + ecc_corrected.hex()[:-1])
-        data_corrected = modify_buffer(data_corrected, invert=self.ecc_protected_data_invert, reverse=self.ecc_protected_data_reverse)
-        ecc_corrected = modify_buffer(ecc_corrected, invert=self.ecc_invert, reverse=self.ecc_reverse)
+
+        # decode chunk
+        flips, data_corrected, ecc_corrected = self.layout.bch.decode(data, ecc)
+
+        # check flips
         if flips == -1:
             raise ValueError("Uncorrectable number of bitflips.")
         if flips:
             self.corrected_bits += flips
             LOGGER.debug(f"Detected {flips} flips")
 
-        for start, end in data_ranges:
-            length = end - start
-            data_map[start] = data_corrected[:length]
-            data_corrected = data_corrected[length:]
-        assert not data_corrected
-        for start, end in ecc_ranges:
-            length = end - start
-            data_map[start] = ecc_corrected[:length]
-            ecc_corrected = ecc_corrected[length:]
-        assert not ecc_corrected
+        # modify data and ecc buffers to revert back
+        if self.layout.left_shift == 4:
+            ecc_corrected = bytes.fromhex("0" + ecc_corrected.hex()[:-1])
+        ecc_corrected = modify_buffer(ecc_corrected, self.layout.ecc_invert, self.layout.ecc_reverse)
+        data_corrected = modify_buffer(
+            data_corrected, self.layout.protected_data_invert, self.layout.protected_data_reverse
+        )
+
+        return data_corrected, ecc_corrected
 
     def correct_page(self, page):
-        # Do correction
         data_map = dict()
         all_erased = True
-        for chunk in chain(self.ecc_protected_data, self.ecc):
+
+        # check if page is empty (all 0xff)
+        for chunk in chain(self.layout.ecc_protected_data, self.layout.ecc):
             for start, end in chunk:
                 buf = page[start:end]
                 if buf != b"\xff" * len(buf):
                     all_erased = False
                 data_map[start] = buf
+
+        corrected_data_map = {}
+        # correct if page not empty
         if not all_erased:
-            for chunk_data_ranges, chunk_ecc_ranges in zip(self.ecc_protected_data, self.ecc):
-                self.bch_correct_chunk(chunk_data_ranges, chunk_ecc_ranges, data_map)  # update data_map with corrected data
+            for chunk_data_ranges, chunk_ecc_ranges in zip(self.layout.ecc_protected_data, self.layout.ecc):
+                # concatenate chunks
+                raw_data = b"".join(data_map[start] for start, _ in chunk_data_ranges)
+                raw_ecc = b"".join(data_map[start] for start, _ in chunk_ecc_ranges)
+
+                # correct chunk
+                data_corrected, ecc_corrected = self.bch_correct_chunk(raw_data, raw_ecc)
+
+                # split corrected buffers up into chunks
+                for start, end in chunk_data_ranges:
+                    length = end - start
+                    corrected_data_map[start] = data_corrected[:length]
+                    data_corrected = data_corrected[length:]
+                assert not data_corrected
+                for start, end in chunk_ecc_ranges:
+                    length = end - start
+                    corrected_data_map[start] = ecc_corrected[:length]
+                    ecc_corrected = ecc_corrected[length:]
+                assert not ecc_corrected
+
         # Rebuild page data
-        corrected_page = self.rebuild_buffer(data_map, raw_pagesize=self.pagesize + self.oobsize)
+        corrected_page = self.rebuild_buffer(corrected_data_map, self.layout.pagesize + self.layout.oobsize)
         return corrected_page
 
     def correct_partition(self):
-        out = []
-        raw_pagesize = self.pagesize + self.oobsize
+        corrected_pages = []
+        raw_pagesize = self.layout.pagesize + self.layout.oobsize
+        raw_blocksize = raw_pagesize * self.layout.pages_per_block
+        start_offset = self.start * raw_blocksize
 
-        for i in tqdm(range(0, self.size_with_oob, raw_pagesize)):
-            page = self.mm[i : i + raw_pagesize]
-            if self.ecc and self.ecc_protected_data and self.bch:
+        for i in tqdm(range(start_offset, start_offset + self.raw_partition_size, raw_pagesize)):
+            # correct page if sufficient parameters available
+            page = self.data[i : i + raw_pagesize]
+            if self.layout.ecc and self.layout.ecc_protected_data and self.layout.bch:
                 corrected_page = self.correct_page(page)
             else:
                 corrected_page = page
+
+            # slice userdata from page
             userdata = b""
-            for chunk in self.user_data:
+            for chunk in self.layout.user_data:
                 for start, end in chunk:
                     userdata += corrected_page[start:end]
-            # Append transaction in case of ETFS
-            if self.etfs_layout:
+
+            # append transaction in case of ETFS
+            if self.layout.etfs_layout:
                 userdata += self.build_transaction(corrected_page)
-            out.append(userdata)
-        return b"".join(out)
+
+            corrected_pages.append(userdata)
+
+        return b"".join(corrected_pages)
 
     def build_transaction(self, page):
         transaction = b""
-        start, end = self.etfs_layout["fid"]
+        start, end = self.layout.etfs_layout["fid"]
         transaction += page[start:end]
         transaction += b"\x00" * 2  # fid padding?
         for key in ("cluster", "nclusters"):
-            start, end = self.etfs_layout[key]
+            start, end = self.layout.etfs_layout[key]
             transaction += page[start:end]
         transaction += b"\x00" * 2  # tacode and dacode
-        start, end = self.etfs_layout["sequence"]
+        start, end = self.layout.etfs_layout["sequence"]
         transaction += page[start:end]
         return transaction
