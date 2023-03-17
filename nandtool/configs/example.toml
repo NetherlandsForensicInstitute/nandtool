@@ -1,106 +1,105 @@
 # list the partitions to correct
-partitions = ['SIMPLE', 'COMPLEX1', 'COMPLEX2', 'NOECC', 'ETFS']
+partitions = ["SIMPLE", "COMPLEX1", "COMPLEX2", "RAW", "ETFS"]
 
 # define the parameters for each ecc algorithm
 [bch4]
-t=4
-poly=8219
+t = 4
+poly = 8219
 
 [custom_bch8]
-t=8
-poly=17475 
+t = 8
+poly = 17475
 
 # define the layout for each partition
 
 # simple ecc correction layout
 [simple_layout]
 # page size in the partition
-pagesize=2048
+pagesize = 2048
 # out of bound size (ecc, padding, parity, etfs, etc.)
-oobsize=64
+oobsize = 64
 # number of pages per block
-pages_per_block=64
+pages_per_block = 64
 # ecc protected intervals per chunk per page (4 chunks of 0x200 bytes)
-ecc_protected_data=[ [[0, 512]], [[512, 1024]], [[1024, 1536]], [[1536, 2048]] ]
+ecc_protected_data = [[[0, 512]], [[512, 1024]], [[1024, 1536]], [[1536, 2048]]]
 # user data intervals per chunk per page (4 chunks of 0x200 bytes)
-user_data=[ [[0, 512]], [[512, 1024]], [[1024, 1536]], [[1536, 2048]] ]
-# ecc data intervals per chunk per page (13 bytes ecc per chunks)
-ecc=[ [[2050, 2063]], [[2064, 2077]], [[2078, 2091]], [[2092, 2105]] ]
+user_data = [[[0, 512]], [[512, 1024]], [[1024, 1536]], [[1536, 2048]]]
+# ecc data intervals per chunk per page (7 bytes ecc per chunks)
+ecc = [[[2050, 2057]], [[2064, 2071]], [[2078, 2085]], [[2092, 2099]]]
 # ecc algorithm (must be defined in a section)
-ecc_algorithm='bch4'
+ecc_algorithm = "bch4"
 
 # complex ecc correction layout
 [complex_layout]
-pagesize=2048
-oobsize=64
-pages_per_block=64
-# 4 chunks of 0x204 bytes
-ecc_protected_data=[ [[0, 464], [465, 517]], [[528, 992], [993, 1045]], [[1056, 1520], [1521, 1573]], [[1584, 2048], [2049, 2101]] ]
-# 3 chunks of 0x204 bytes and 1 chunck of 0x1f4
-user_data=[ [[0, 464], [465, 517]], [[528, 992], [993, 1045]], [[1056, 1520], [1521, 1573]], [[1584, 2048], [2049, 2085]] ]
-# 7 bytes ecc per chunk
-ecc=[ [[517, 524]], [[1045, 1052]], [[1573, 1580]], [[2101, 2108]] ]
-ecc_algorithm='custom_bch8'
+pagesize = 2048
+oobsize = 64
+pages_per_block = 64
+# 2 chunks of 0x410 bytes
+eecc_protected_data=[[[0, 0x410]], [[0x41E, 0x800], [0x802, 0x810], [0x800, 0x802], [0x81E, 0x83C]]]
+user_data=[[[0, 0x410]], [[0x41E, 0x800], [0x802, 0x810]]]
+# 14 bytes ecc per chunk
+ecc=[[[0x410, 0x41e]], [[0x810, 0x81e]]]
+ecc_algorithm = "custom_bch8"
 # bit shift in the ecc buffer
-left_shift_ecc_buf=4
+left_shift_ecc_buf = 4
 # bitwise reverse the protected data
-ecc_protected_data_reverse=true
+ecc_protected_data_reverse = true
 # bitwise invert the protected data
-ecc_protected_data_invert=true
+ecc_protected_data_invert = true
 # bitwise reverse the ecc bytes
-ecc_reverse=true
+ecc_reverse = true
 # bitwise invert the ecc bytes
-ecc_invert=true
+ecc_invert = true
 
 # no ecc correction layout (used for extracting only user data from image)
-[no_ecc_layout]
-pagesize=2048
-oobsize=64
-pages_per_block=64
-user_data=[ [[0, 512]], [[512, 1024]], [[1024, 1536]], [[1536, 2048]] ]
+[raw_layout]
+pagesize = 2048
+oobsize = 64
+pages_per_block = 64
+user_data = [[[0, 512]], [[512, 1024]], [[1024, 1536]], [[1536, 2048]]]
 
 # ecc correction and resolve etfs transactions layout
 [etfs_layout]
-pagesize=2048
-oobsize=64
-pages_per_block=64
-ecc_protected_data=[ [[0, 512],[2048, 2052]], [[512, 1024],[2052, 2056]], [[1024, 1536],[2056, 2060]], [[1536, 2048],[2060, 2064]] ]
-user_data=[ [[0, 512]], [[512, 1024]], [[1024, 1536]], [[1536, 2048]] ]
-ecc=[[[2064, 2071]], [[2071, 2078]], [[2078, 2085]], [[2085, 2092]] ] 
-left_shift_ecc_buf=4
-ecc_algorithm='bch4'
+pagesize = 2048
+oobsize = 64
+pages_per_block = 64
+ecc_protected_data = [[[0, 512], [2048, 2052]], [[512, 1024], [2052, 2056]], [[1024, 1536], [2056, 2060]], [[1536, 2048], [2060, 2064]]]
+user_data = [[[0, 512]], [[512, 1024]], [[1024, 1536]], [[1536, 2048]]]
+ecc = [[[2064, 2071]], [[2071, 2078]], [[2078, 2085]], [[2085, 2092]]]
+left_shift_ecc_buf = 4
+ecc_algorithm = "bch4"
 # etfs description (must be defined in a section)
-etfs='etfs_transaction'
+etfs = "etfs_transaction"
 
 # define the etfs transaction (if applicable)
 [etfs_transaction]
-fid=[2060, 2062]
-cluster=[2056, 2060]
-nclusters=[2050, 2052]
-sequence=[2052, 2056]
+fid = [2060, 2062]
+cluster = [2056, 2060]
+nclusters = [2050, 2052]
+sequence = [2052, 2056]
 
-# List the start, end, and layout for each partition 
+# List the start, end, and layout for each partition
 [SIMPLE]
-startblock=0
-endblock=20
-layout='simple_layout'
+startblock = 0
+endblock = 19
+layout = "simple_layout"
 
 [COMPLEX1]
-startblock=20
-endblock=40
-layout='complex_layout'
+startblock = 20
+endblock = 39
+layout = "complex_layout"
 
 [COMPLEX2]
-startblock=45
-endblock=400
-layout='complex_layout'
-
-[NOECC]
-startblock=0
-endblock=-1  # end of file
-layout='raw_layout'
+startblock = 45
+endblock = 399
+layout = "complex_layout"
 
 [ETFS]
-startblock=454
-endblock=2047
-layout='etfs_layout'
+startblock = 454
+endblock = 2047
+layout = "etfs_layout"
+
+[RAW]
+startblock = 0
+endblock = -1         # end of file
+layout = "raw_layout"
