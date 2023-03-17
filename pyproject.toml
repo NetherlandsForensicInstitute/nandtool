@@ -10,6 +10,7 @@ license = "Apache-2.0"
 readme = "README.md"
 repository = "https://github.com/NetherlandsForensicInstitute/nandtool"
 keywords = ["ecc", "nand"]
+packages = [{ include = "nandtool" }, { include = "tests" }]
 
 
 [tool.poetry.dependencies]
