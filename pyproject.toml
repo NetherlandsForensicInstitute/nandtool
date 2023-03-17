@@ -20,6 +20,10 @@ numpy = "^1.24.2"
 tqdm = "^4.64.1"
 
 
+[tool.poetry.group.test.dependencies]
+pytest = "*"
+
+
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
