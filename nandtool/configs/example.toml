@@ -35,8 +35,9 @@ pagesize = 2048
 oobsize = 64
 pages_per_block = 64
 # 2 chunks of 0x410 bytes
-eecc_protected_data=[[[0, 0x410]], [[0x41E, 0x800], [0x802, 0x810], [0x800, 0x802], [0x81E, 0x83C]]]
-user_data=[[[0, 0x410]], [[0x41E, 0x800], [0x802, 0x810]]]
+ecc_protected_data=[[[0, 0x410]], [[0x41e, 0x800], [0x802, 0x810], [0x800, 0x802], [0x81e, 0x83c]]]
+# chunk of 0x410 and chunk of 0x3f0
+user_data=[[[0, 0x410]], [[0x41e, 0x800], [0x802, 0x810]]]
 # 14 bytes ecc per chunk
 ecc=[[[0x410, 0x41e]], [[0x810, 0x81e]]]
 ecc_algorithm = "custom_bch8"
@@ -91,12 +92,12 @@ layout = "complex_layout"
 
 [COMPLEX2]
 startblock = 45
-endblock = 399
+endblock = 99
 layout = "complex_layout"
 
 [ETFS]
-startblock = 454
-endblock = 2047
+startblock = 128
+endblock = 255
 layout = "etfs_layout"
 
 [RAW]

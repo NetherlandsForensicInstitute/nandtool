@@ -21,8 +21,7 @@ def check_and_augment_conf(settings):
     # TODO: add decent checks
     for partition in settings.partitions:
         part = settings[partition]
-        layout = part.layout
-        part.layout = settings[layout]
+        part.layout = settings[part.layout]
         layout = part.layout
         layout.blocksize = (layout.pagesize + layout.oobsize) * layout.pages_per_block
 
@@ -51,4 +50,3 @@ def check_and_augment_conf(settings):
             layout.ecc_reverse = False
         if not hasattr(layout, "ecc_invert"):
             layout.ecc_invert = False
-

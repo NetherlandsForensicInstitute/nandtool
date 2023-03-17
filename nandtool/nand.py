@@ -9,6 +9,9 @@ LOGGER = logging.getLogger(__name__)
 
 
 def modify_buffer(buffer, reverse=False, invert=False, left_shift=False):
+    if not buffer:
+        return None
+
     array = np.frombuffer(buffer, "u1")
     if invert:
         array = array ^ 0xFF
@@ -23,7 +26,9 @@ def build_partitions(image_data, conf):
     for partition in conf.partitions:
         partconf = conf[partition]
         LOGGER.info(f"Start building partition: {partition}")
-        partitions[partition] = NAND(image_data, partconf)
+        nand = NAND(image_data, partconf)
+        nand.correct_partition()
+        partitions[partition] = nand
         LOGGER.info(f"Done building partition: {partition}")
     return partitions
 
@@ -40,11 +45,13 @@ class Layout:
 
         # layout of ecc and data in the page
         self.ecc = layout_conf["ecc"]
-        self.ecc_protected_data = layout_conf["ecc_protected_data"]
+        self.protected_data = layout_conf["ecc_protected_data"]
         self.user_data = layout_conf["user_data"]
+
+        # modifications to buffer
         self.left_shift = layout_conf["left_shift_ecc_buf"]
-        self.protected_data_reverse = layout_conf["ecc_protected_data_reverse"]
-        self.protected_data_invert = layout_conf["ecc_protected_data_invert"]
+        self.data_reverse = layout_conf["ecc_protected_data_reverse"]
+        self.data_invert = layout_conf["ecc_protected_data_invert"]
         self.ecc_reverse = layout_conf["ecc_reverse"]
         self.ecc_invert = layout_conf["ecc_invert"]
 
@@ -84,7 +91,7 @@ class NAND:
 
         # start ecc correction
         self.corrected_bits = 0
-        self.corrected = self.correct_partition()
+        self.corrected = None
         LOGGER.info(f"Corrected {self.corrected_bits} bits")
 
     @staticmethod
@@ -104,7 +111,7 @@ class NAND:
     def bch_correct_chunk(self, data, ecc):
         # modify data and ecc buffers if needed
         ecc = modify_buffer(ecc, self.layout.ecc_invert, self.layout.ecc_reverse)
-        data = modify_buffer(data, self.layout.protected_data_invert, self.layout.protected_data_reverse)
+        data = modify_buffer(data, self.layout.data_invert, self.layout.data_reverse)
         if self.layout.left_shift == 4:
             ecc = bytes.fromhex(ecc.hex()[1:] + "0")
 
@@ -122,9 +129,7 @@ class NAND:
         if self.layout.left_shift == 4:
             ecc_corrected = bytes.fromhex("0" + ecc_corrected.hex()[:-1])
         ecc_corrected = modify_buffer(ecc_corrected, self.layout.ecc_invert, self.layout.ecc_reverse)
-        data_corrected = modify_buffer(
-            data_corrected, self.layout.protected_data_invert, self.layout.protected_data_reverse
-        )
+        data_corrected = modify_buffer(data_corrected, self.layout.data_invert, self.layout.data_reverse)
 
         return data_corrected, ecc_corrected
 
@@ -133,7 +138,7 @@ class NAND:
         all_erased = True
 
         # check if page is empty (all 0xff)
-        for chunk in chain(self.layout.ecc_protected_data, self.layout.ecc):
+        for chunk in chain(self.layout.protected_data, self.layout.ecc):
             for start, end in chunk:
                 buf = page[start:end]
                 if buf != b"\xff" * len(buf):
@@ -143,7 +148,7 @@ class NAND:
         corrected_data_map = {}
         # correct if page not empty
         if not all_erased:
-            for chunk_data_ranges, chunk_ecc_ranges in zip(self.layout.ecc_protected_data, self.layout.ecc):
+            for chunk_data_ranges, chunk_ecc_ranges in zip(self.layout.protected_data, self.layout.ecc):
                 # concatenate chunks
                 raw_data = b"".join(data_map[start] for start, _ in chunk_data_ranges)
                 raw_ecc = b"".join(data_map[start] for start, _ in chunk_ecc_ranges)
@@ -176,7 +181,7 @@ class NAND:
         for i in tqdm(range(start_offset, start_offset + self.raw_partition_size, raw_pagesize)):
             # correct page if sufficient parameters available
             page = self.data[i : i + raw_pagesize]
-            if self.layout.ecc and self.layout.ecc_protected_data and self.layout.bch:
+            if self.layout.ecc and self.layout.protected_data and self.layout.bch:
                 corrected_page = self.correct_page(page)
             else:
                 corrected_page = page
@@ -193,7 +198,7 @@ class NAND:
 
             corrected_pages.append(userdata)
 
-        return b"".join(corrected_pages)
+        self.corrected = b"".join(corrected_pages)
 
     def build_transaction(self, page):
         transaction = b""
