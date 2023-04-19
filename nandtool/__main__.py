@@ -14,7 +14,7 @@ if __name__ == "__main__":
 
     parser = ArgumentParser(description="The parent parser", add_help=False)
 
-    main_parser = ArgumentParser(prog="qnxmount")
+    main_parser = ArgumentParser(prog="mode")
     subparsers = main_parser.add_subparsers(title="mount or list", required=True, dest="type")
 
     parser_mount = subparsers.add_parser("mount", parents=[parser], help="mount (ecc corrected) partitions of the image")
