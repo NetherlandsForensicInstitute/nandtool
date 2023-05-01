@@ -92,7 +92,6 @@ class NAND:
         # start ecc correction
         self.corrected_bits = 0
         self.corrected = None
-        LOGGER.info(f"Corrected {self.corrected_bits} bits")
 
     @staticmethod
     def rebuild_buffer(mapping, raw_pagesize):
@@ -199,6 +198,7 @@ class NAND:
             corrected_pages.append(userdata)
 
         self.corrected = b"".join(corrected_pages)
+        LOGGER.info(f"Corrected {self.corrected_bits} bits")
 
     def build_transaction(self, page):
         transaction = b""
