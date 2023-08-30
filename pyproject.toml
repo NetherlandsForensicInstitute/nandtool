@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "nandtool"
-version = "0.1.2"
+version = "0.2.0"
 description = "ECC correction for NAND flash"
 authors = [
     "Francis Hoogendijk <f.hoogendijk@nfi.nl>",
@@ -18,7 +18,7 @@ python = "^3.8"
 crcmod = "^1.7"
 fusepy = "^3.0.1"
 pytest = "^7.2.1"
-bchlib = "^0.14.0"
+bchlib = "1.0.0"
 dynaconf = "^3.1.11"
 numpy = "^1.24.2"
 tqdm = "^4.64.1"

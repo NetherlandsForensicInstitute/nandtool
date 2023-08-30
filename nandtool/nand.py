@@ -64,7 +64,7 @@ class Layout:
         # ecc algorithm if specified
         ecc_algorithm = layout_conf["ecc_algorithm"]
         if ecc_algorithm:
-            self.bch = bchlib.BCH(ecc_algorithm["poly"], ecc_algorithm["t"])
+            self.bch = bchlib.BCH(prim_poly=ecc_algorithm["poly"], t=ecc_algorithm["t"])
         else:
             self.bch = None
 
@@ -115,7 +115,7 @@ class NAND:
             ecc = bytes.fromhex(ecc.hex()[1:] + "0")
 
         # decode chunk
-        flips, data_corrected, ecc_corrected = self.layout.bch.decode(data, ecc)
+        flips = self.layout.bch.decode(data, ecc)
 
         # check flips
         if flips == -1:
@@ -123,14 +123,18 @@ class NAND:
         if flips:
             self.corrected_bits += flips
             LOGGER.debug(f"Detected {flips} flips")
+            # correct bitflips
+            data = bytearray(data)
+            ecc = bytearray(ecc)
+            self.layout.bch.correct(data, ecc)
 
         # modify data and ecc buffers to revert back
         if self.layout.left_shift == 4:
-            ecc_corrected = bytes.fromhex("0" + ecc_corrected.hex()[:-1])
-        ecc_corrected = modify_buffer(ecc_corrected, self.layout.ecc_invert, self.layout.ecc_reverse)
-        data_corrected = modify_buffer(data_corrected, self.layout.data_invert, self.layout.data_reverse)
+            ecc = bytes.fromhex("0" + ecc.hex()[:-1])
+        ecc = modify_buffer(ecc, self.layout.ecc_invert, self.layout.ecc_reverse)
+        data = modify_buffer(data, self.layout.data_invert, self.layout.data_reverse)
 
-        return data_corrected, ecc_corrected
+        return data, ecc
 
     def correct_page(self, page):
         data_map = dict()
