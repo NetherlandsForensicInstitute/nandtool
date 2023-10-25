@@ -14,7 +14,7 @@
 #     ...:     print(f'[[{i+chunkdatasize+1}, {i+chunkdatasize+1+13}]]', end=' ')
 # [[517, 530]] [[1049, 1062]] [[1581, 1594]] [[2113, 2126]] [[2645, 2658]] [[3177, 3190]] [[3709, 3722]] [[4241, 4254]] # ecc, [[4773, 4786]]  discard last one
 
-partitions = ['whole_chip']
+partitions = ['whole_chip', 'whole_chip_no_ecc']
 
 [bch8]
 t=8
@@ -29,7 +29,18 @@ user_data=[ [[0, 372],[373, 517]], [[532, 904],[905, 1049]], [[1064, 1436],[1437
 ecc= [ [[517, 530]], [[1049, 1062]], [[1581, 1594]], [[2113, 2126]], [[2645, 2658]], [[3177, 3190]], [[3709, 3722]], [[4241, 4254]] ]
 ecc_algorithm='bch8'
 
+[whole_chip_no_ecc_layout]
+pagesize=4096
+oobsize=224
+pages_per_block=64
+user_data=[ [[0, 372],[373, 517]], [[532, 904],[905, 1049]], [[1064, 1436],[1437, 1581]], [[1596, 1968],[1969, 2113]],  [[2128, 2500],[2501, 2645]], [[2660, 3032],[3033, 3177]], [[3192, 3564],[3565, 3709]], [[3724, 4096],[4097, 4209]] ]
+
 [whole_chip]
 startblock=0
 endblock=2048
 layout='whole_chip_layout'
+
+[whole_chip_no_ecc]
+startblock=0
+endblock=2048
+layout='whole_chip_no_ecc_layout'
