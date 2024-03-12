@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "nandtool"
-version = "0.2.0"
+version = "0.3.0"
 description = "ECC correction for NAND flash"
 authors = [
     "Francis Hoogendijk <f.hoogendijk@nfi.nl>",
