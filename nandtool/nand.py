@@ -55,6 +55,8 @@ class Layout:
         self.ecc_reverse = layout_conf["ecc_reverse"]
         self.ecc_invert = layout_conf["ecc_invert"]
 
+        self.ecc_strict = layout_conf["ecc_strict"]
+
         # etfs layout if specified
         if hasattr(layout_conf, "etfs") or "etfs" in layout_conf:
             self.etfs_layout = layout_conf["etfs"]
@@ -84,10 +86,14 @@ class NAND:
         self.raw_partition_size = self.num_blocks * self.layout.blocksize
 
         # calculate corrected partition size
-        pagesize = sum((end - start for chunk in self.layout.user_data for start, end in chunk))
+        pagesize = sum(
+            (end - start for chunk in self.layout.user_data for start, end in chunk)
+        )
         if self.layout.etfs_layout:
             pagesize += 16
-        self.corrected_partition_size = self.num_blocks * self.layout.pages_per_block * pagesize
+        self.corrected_partition_size = (
+            self.num_blocks * self.layout.pages_per_block * pagesize
+        )
 
         # start ecc correction
         self.corrected_bits = 0
@@ -108,6 +114,7 @@ class NAND:
         return out
 
     def bch_correct_chunk(self, data, ecc):
+        uncorrectable = False
         # modify data and ecc buffers if needed
         ecc = modify_buffer(ecc, self.layout.ecc_invert, self.layout.ecc_reverse)
         data = modify_buffer(data, self.layout.data_invert, self.layout.data_reverse)
@@ -119,8 +126,9 @@ class NAND:
 
         # check flips
         if flips == -1:
-            raise ValueError("Uncorrectable number of bitflips.")
-        if flips:
+            # raise ValueError("Uncorrectable number of bitflips.")
+            uncorrectable = True
+        elif flips > 0:
             self.corrected_bits += flips
             LOGGER.debug(f"Detected {flips} flips")
             # correct bitflips
@@ -134,11 +142,12 @@ class NAND:
         ecc = modify_buffer(ecc, self.layout.ecc_invert, self.layout.ecc_reverse)
         data = modify_buffer(data, self.layout.data_invert, self.layout.data_reverse)
 
-        return data, ecc
+        return data, ecc, uncorrectable
 
     def correct_page(self, page):
         data_map = dict()
         all_erased = True
+        uncorrectable_page = False
 
         # check if page is empty (all 0xff)
         for chunk in chain(self.layout.protected_data, self.layout.ecc):
@@ -151,13 +160,19 @@ class NAND:
         corrected_data_map = {}
         # correct if page not empty
         if not all_erased:
-            for chunk_data_ranges, chunk_ecc_ranges in zip(self.layout.protected_data, self.layout.ecc):
+            for chunk_data_ranges, chunk_ecc_ranges in zip(
+                self.layout.protected_data, self.layout.ecc
+            ):
                 # concatenate chunks
                 raw_data = b"".join(data_map[start] for start, _ in chunk_data_ranges)
                 raw_ecc = b"".join(data_map[start] for start, _ in chunk_ecc_ranges)
 
                 # correct chunk
-                data_corrected, ecc_corrected = self.bch_correct_chunk(raw_data, raw_ecc)
+                data_corrected, ecc_corrected, uncorrectable_chunk = (
+                    self.bch_correct_chunk(raw_data, raw_ecc)
+                )
+
+                uncorrectable_page |= uncorrectable_chunk
 
                 # split corrected buffers up into chunks
                 for start, end in chunk_data_ranges:
@@ -172,8 +187,10 @@ class NAND:
                 assert not ecc_corrected
 
         # Rebuild page data
-        corrected_page = self.rebuild_buffer(corrected_data_map, self.layout.pagesize + self.layout.oobsize)
-        return corrected_page
+        corrected_page = self.rebuild_buffer(
+            corrected_data_map, self.layout.pagesize + self.layout.oobsize
+        )
+        return corrected_page, uncorrectable_page
 
     def correct_partition(self):
         corrected_pages = []
@@ -181,11 +198,19 @@ class NAND:
         raw_blocksize = raw_pagesize * self.layout.pages_per_block
         start_offset = self.start * raw_blocksize
 
-        for i in tqdm(range(start_offset, start_offset + self.raw_partition_size, raw_pagesize)):
+        for i in tqdm(
+            range(start_offset, start_offset + self.raw_partition_size, raw_pagesize)
+        ):
             # correct page if sufficient parameters available
             page = self.data[i : i + raw_pagesize]
             if self.layout.ecc and self.layout.protected_data and self.layout.bch:
-                corrected_page = self.correct_page(page)
+                corrected_page, uncorrectable = self.correct_page(page)
+                if self.layout.ecc_strict and uncorrectable:
+                    raise ValueError(f"Uncorrectable bitflips in page at: 0x{i:08x}")
+                elif uncorrectable:
+                    print(
+                        f"Uncorrectable bitflips in page at: {i:08x}, resuming with corrupt data"
+                    )
             else:
                 corrected_page = page
 

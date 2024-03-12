@@ -46,7 +46,9 @@ def create_page(config):
         chunk_ecc = decode(enc_ecc, config)
 
         for start, end in chunk_ecc_ranges:
-            assert len(chunk_ecc) == end - start, f"length of ecc {len(chunk_ecc)} not equal to expected {end} - {start}"
+            assert (
+                len(chunk_ecc) == end - start
+            ), f"length of ecc {len(chunk_ecc)} not equal to expected {end} - {start}"
             start_data = start_data[:start] + chunk_ecc + start_data[end:]
 
     return start_data
@@ -66,7 +68,9 @@ def create_test_image():
         num_pages = layout.pages_per_block
 
         n = (endblock - startblock + 1) * num_pages
-        partition_data[(startblock, endblock)] = b"".join([create_page(layout)[0] for _ in range(n)])
+        partition_data[(startblock, endblock)] = b"".join(
+            [create_page(layout)[0] for _ in range(n)]
+        )
 
     with open(Path(__file__).parent / "data/test_image.bin", "wb") as f:
         partition_data = sorted(partition_data.items())
@@ -83,9 +87,16 @@ def test_modify_buffer():
     data = b"\xde\x3d\x54\xd9\x9b\xfa\xd6\x65\x3b\xff"
 
     assert modify_buffer(data) == data
-    assert modify_buffer(data, invert=True) == b"\x21\xc2\xab\x26\x64\x05\x29\x9a\xc4\x00"
-    assert modify_buffer(data, reverse=True) == b"\x7b\xbc\x2a\x9b\xd9\x5f\x6b\xa6\xdc\xff"
-    assert modify_buffer(data, reverse=True, invert=True) == b"\x84\x43\xd5\x64\x26\xa0\x94\x59\x23\x00"
+    assert (
+        modify_buffer(data, invert=True) == b"\x21\xc2\xab\x26\x64\x05\x29\x9a\xc4\x00"
+    )
+    assert (
+        modify_buffer(data, reverse=True) == b"\x7b\xbc\x2a\x9b\xd9\x5f\x6b\xa6\xdc\xff"
+    )
+    assert (
+        modify_buffer(data, reverse=True, invert=True)
+        == b"\x84\x43\xd5\x64\x26\xa0\x94\x59\x23\x00"
+    )
     assert modify_buffer(None) == None
 
 
@@ -97,11 +108,19 @@ def test_correct_chunk():
     ecc = b'\xbd"\x82\xbe\x185\xa0'
 
     nand.bch_correct_chunk(data, ecc)
-    assert nand.corrected_bits == 0, "Bitflip(s) incorrectly detected when ecc correcting chunk"
+    assert (
+        nand.corrected_bits == 0
+    ), "Bitflip(s) incorrectly detected when ecc correcting chunk"
 
     data_flip = (int.from_bytes(data, "big") ^ 0x0100).to_bytes(len(data), "big")
-    nand.bch_correct_chunk(data_flip, ecc)
-    assert nand.corrected_bits == 1, f"Incorrect number of bitflips detected ({nand.corrected_bits}), should be 1"
+    data, ecc, uncorrectable = nand.bch_correct_chunk(data_flip, ecc)
+    assert (
+        nand.corrected_bits == 1
+    ), f"Incorrect number of bitflips detected ({nand.corrected_bits}), should be 1"
+    assert not uncorrectable, "Invalid detection of correctable flips"
+
+    data, ecc, uncorrectable = nand.bch_correct_chunk(data, b"\x00" * 7)
+    assert uncorrectable, "Invalid detection of uncorrectable errors"
 
 
 def test_image(test_image_data):

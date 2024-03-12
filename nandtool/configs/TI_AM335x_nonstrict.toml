@@ -1,0 +1,23 @@
+# TI AM335x
+# Layout: 'OMAP_ECC_BCH8_CODE_HW'
+
+partitions = ['whole_chip']
+
+[bch8]
+t=8
+poly=8219
+
+[whole_chip_layout]
+pagesize=2048
+oobsize=64
+pages_per_block=64
+ecc_protected_data=[ [[0, 512]], [[512, 1024]], [[1024, 1536]], [[1536, 2048]] ]  # 4 chunks of 0x200 bytes
+user_data=[ [[0, 512]], [[512, 1024]], [[1024, 1536]], [[1536, 2048]] ]  # 4 chunks of 0x200 bytes
+ecc=[ [[2050, 2063]], [[2064, 2077]], [[2078, 2091]], [[2092, 2105]] ] # 13 bytes ecc per chunk
+ecc_algorithm='bch8'
+ecc_strict=false
+
+[whole_chip]
+startblock=0
+endblock=2048
+layout='whole_chip_layout'
