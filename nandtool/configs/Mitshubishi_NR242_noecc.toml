@@ -1,0 +1,19 @@
+partitions = ['ETFS']
+
+[etfs_layout]
+pagesize=2048 #0x800
+oobsize=64 #0x40
+pages_per_block=64
+user_data=[ [[0, 512]], [[512, 1024]], [[1024, 1536]], [[1536, 2048]] ]
+etfs='etfs_transaction'
+
+[etfs_transaction]
+fid=[2066, 2068]
+nclusters=[2050, 2052]
+sequence=[2068, 2072]
+cluster=[2052, 2056]
+
+[ETFS]
+startblock=0
+endblock=4095
+layout='etfs_layout'
