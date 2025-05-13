@@ -8,7 +8,7 @@ from tqdm import tqdm
 LOGGER = logging.getLogger(__name__)
 
 
-def modify_buffer(buffer, reverse=False, invert=False, left_shift=False):
+def modify_buffer(buffer, invert=False, reverse=False, left_shift=False):
     if not buffer:
         return None
 
